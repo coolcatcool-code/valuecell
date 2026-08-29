@@ -20,7 +20,7 @@ const ChatInputArea: FC<ChatInputAreaProps> = ({
   onChange,
   onSend,
   onKeyDown,
-  placeholder = "Type your message...",
+  placeholder = "Ask me anything about investing...",
   disabled = false,
   className,
   variant = "chat",
@@ -44,9 +44,8 @@ const ChatInputArea: FC<ChatInputAreaProps> = ({
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 rounded-2xl bg-white p-4",
-        "border border-gray-200 shadow-[0px_4px_20px_8px_rgba(17,17,17,0.04)]",
-        "focus-within:border-gray-300",
+        "vc-chat-input flex flex-col gap-2 rounded-surface bg-paper p-4",
+        "border border-ink-faint shadow-elevation-1",
         isWelcomeVariant && "w-2/3 min-w-[600px]",
         !isWelcomeVariant && "w-full",
         className,
@@ -63,12 +62,12 @@ const ChatInputArea: FC<ChatInputAreaProps> = ({
       />
       <Button
         size="icon"
-        className="size-8 cursor-pointer self-end rounded-full"
+        className="size-8 cursor-pointer self-end rounded-full bg-brand text-brand-foreground hover:bg-brand/90"
         onClick={handleSend}
         disabled={disabled || !value.trim()}
         aria-label="Send message"
       >
-        <ArrowUp size={16} className="text-white" />
+        <ArrowUp size={16} />
       </Button>
     </div>
   );

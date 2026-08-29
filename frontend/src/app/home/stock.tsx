@@ -113,7 +113,7 @@ function Stock() {
   if (isPriceLoading || isHistoryLoading || isDetailLoading) {
     return (
       <div className="flex h-96 items-center justify-center">
-        <div className="text-gray-500 text-lg">Loading stock data...</div>
+        <div className="text-body text-ink-soft">Loading stock data...</div>
       </div>
     );
   }
@@ -122,13 +122,13 @@ function Stock() {
   if (priceError || historyError || detailError) {
     return (
       <div className="flex h-96 flex-col items-center justify-center gap-4">
-        <div className="text-lg text-red-500">
+        <div className="text-body text-signal-danger">
           Error loading stock data:{" "}
           {priceError?.message || historyError?.message || detailError?.message}
         </div>
         <Button
           variant="secondary"
-          className="cursor-pointer text-neutral-400"
+          className="cursor-pointer"
           onClick={handleRemoveStock}
           disabled={removeStockMutation.isPending}
         >
@@ -142,7 +142,7 @@ function Stock() {
   if (!stockInfo || !stockPriceData) {
     return (
       <div className="flex h-96 items-center justify-center">
-        <div className="text-gray-500 text-lg">Stock {stockId} not found</div>
+        <div className="text-body text-ink-soft">Stock {stockId} not found</div>
       </div>
     );
   }
@@ -150,18 +150,21 @@ function Stock() {
   const changeType = getChangeType(stockInfo.changePercent);
 
   return (
-    <div className="flex flex-col gap-8 bg-white px-8 py-6">
-      {/* Stock Main Info */}
+    <div className="flex animate-surface-in flex-col gap-8 bg-paper px-8 py-6">
+      {/* Stock Main Info — this page behaves like a Surface panel that
+          slid in from the right, even though it is still its own route.
+          See docs/JOBS_WEB_DESIGN_CN.md §7.4. */}
       <div className="flex flex-col gap-4">
         <BackButton />
 
         <div className="flex items-center gap-2">
-          {/* <StockIcon stock={stockInfo} /> */}
-          <span className="font-bold text-lg">{stockInfo.companyName}</span>
+          <span className="font-medium text-emphasis text-ink">
+            {stockInfo.companyName}
+          </span>
 
           <Button
             variant="secondary"
-            className="ml-auto text-neutral-400"
+            className="ml-auto"
             onClick={handleRemoveStock}
             disabled={removeStockMutation.isPending}
           >
@@ -171,9 +174,11 @@ function Stock() {
 
         <div>
           <div className="mb-3 flex items-center gap-3">
-            <span className="font-bold text-2xl">{stockInfo.price}</span>
+            <span className="vc-tabular-nums font-medium text-display text-ink">
+              {stockInfo.price}
+            </span>
             <span
-              className="rounded-lg p-2 font-bold text-xs"
+              className="rounded-control px-2 py-1 font-medium text-caption"
               style={{
                 backgroundColor: badgeColors[changeType].bg,
                 color: badgeColors[changeType].text,
@@ -182,7 +187,7 @@ function Stock() {
               {formatChange(stockInfo.changePercent, "%")}
             </span>
           </div>
-          <p className="font-medium text-muted-foreground text-xs">
+          <p className="text-caption text-ink-soft">
             {/* Convert UTC timestamp to local time for display */}
             {TimeUtils.fromUTC(stockPriceData.timestamp).format(
               "MMM DD, YYYY h:mm:ss A",
@@ -194,41 +199,35 @@ function Stock() {
         <Sparkline data={chartData} changeType={changeType} />
       </div>
 
-      {/* <div className="flex flex-col gap-4">
-        <h2 className="font-bold text-lg">Details</h2>
-
-        <StockDetailsList data={detailsData} />
-      </div> */}
-
       <div className="flex flex-col gap-4">
-        <h2 className="font-bold text-lg">About</h2>
+        <h2 className="font-medium text-emphasis text-ink">About</h2>
 
-        <p className="line-clamp-4 text-neutral-500 text-sm leading-6">
+        <p className="line-clamp-4 text-body text-ink-soft leading-relaxed">
           {stockDetailData?.properties?.business_summary}
         </p>
 
         {stockDetailData?.properties && (
-          <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+          <div className="mt-4 grid grid-cols-2 gap-4 text-caption">
             <div>
-              <span className="text-muted-foreground">Sector:</span>
-              <span className="ml-2 font-medium">
+              <span className="text-ink-soft">Sector:</span>
+              <span className="ml-2 font-medium text-ink">
                 {stockDetailData.properties.sector}
               </span>
             </div>
             <div>
-              <span className="text-muted-foreground">Industry:</span>
-              <span className="ml-2 font-medium">
+              <span className="text-ink-soft">Industry:</span>
+              <span className="ml-2 font-medium text-ink">
                 {stockDetailData.properties.industry}
               </span>
             </div>
             {stockDetailData.properties.website && (
               <div className="col-span-2">
-                <span className="text-muted-foreground">Website:</span>
+                <span className="text-ink-soft">Website:</span>
                 <a
                   href={stockDetailData.properties.website}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="ml-2 text-blue-600 hover:underline"
+                  className="ml-2 text-brand hover:underline"
                 >
                   {stockDetailData.properties.website}
                 </a>

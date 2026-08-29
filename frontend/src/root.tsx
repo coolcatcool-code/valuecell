@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
-import AppSidebar from "@/components/valuecell/app-sidebar";
+import AppTopBar from "@/components/valuecell/app-topbar";
+import CommandPalette from "@/components/valuecell/command-palette";
 import { Toaster } from "./components/ui/sonner";
 
 import "overlayscrollbars/overlayscrollbars.css";
@@ -45,8 +46,8 @@ export default function Root() {
   return (
     <QueryClientProvider client={queryClient}>
       <SidebarProvider>
-        <div className="fixed flex size-full overflow-hidden">
-          <AppSidebar />
+        <div className="fixed flex size-full flex-col overflow-hidden bg-paper">
+          <AppTopBar />
 
           <main
             className="relative flex flex-1 overflow-hidden"
@@ -54,7 +55,9 @@ export default function Root() {
           >
             <Outlet />
           </main>
+
           <Toaster />
+          <CommandPalette />
         </div>
       </SidebarProvider>
     </QueryClientProvider>

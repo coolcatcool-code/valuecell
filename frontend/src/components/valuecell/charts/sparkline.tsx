@@ -65,13 +65,9 @@ function Sparkline({
       yAxis: {
         type: "value",
         scale: true,
+        show: false,
         splitLine: {
-          show: true,
-          lineStyle: {
-            color: "rgba(174, 174, 174, 0.5)",
-            opacity: 0.3,
-            type: "solid",
-          },
+          show: false,
         },
       },
       series: [

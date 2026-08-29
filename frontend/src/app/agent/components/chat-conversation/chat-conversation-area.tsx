@@ -85,7 +85,7 @@ const ChatConversationAreaContent: FC<ChatConversationAreaProps> = ({
           value={inputValue}
           onChange={handleInputChange}
           onSend={handleSendMessage}
-          placeholder="Type your message..."
+          placeholder="Ask me anything about investing..."
           disabled={isStreaming}
           variant="chat"
         />

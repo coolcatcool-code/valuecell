@@ -37,6 +37,56 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+
+  /* ============================================================
+     设计系统 2.0 — 见 docs/JOBS_WEB_DESIGN_CN.md 第六部分
+     每一个 token 都能在那份文档里找到"为什么是这个数字"的答案
+     ============================================================ */
+
+  /* 两档圆角：控件用小圆角保持机械感，容器用大圆角传达信任感 */
+  --radius-control: 12px;
+  --radius-surface: 20px;
+
+  /* 语义色角色——颜色只用于三件事：中性骨架 / 品牌强调 / 系统反馈 */
+  --color-ink: var(--foreground);
+  --color-ink-soft: var(--muted-foreground);
+  --color-ink-faint: var(--border);
+  --color-paper: var(--background);
+  --color-paper-soft: var(--paper-soft);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-signal-success: var(--signal-success);
+  --color-signal-warning: var(--signal-warning);
+  --color-signal-danger: var(--signal-danger);
+
+  /* 1.25 比例字号体系，基准是对话正文的 16px */
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-body: 1rem;
+  --text-body--line-height: 1.625rem;
+  --text-emphasis: 1.25rem;
+  --text-emphasis--line-height: 1.75rem;
+  --text-title: 1.5625rem;
+  --text-title--line-height: 2rem;
+  --text-display: 2.5rem;
+  --text-display--line-height: 2.875rem;
+
+  /* 三级阴影——每一级对应一个真实的"离画布距离" */
+  --shadow-elevation-1: 0 1px 2px rgba(17, 17, 17, 0.04);
+  --shadow-elevation-2: 0 8px 24px -4px rgba(17, 17, 17, 0.08);
+  --shadow-elevation-3: 0 24px 48px -12px rgba(17, 17, 17, 0.18);
+
+  /* 统一缓动函数家族——全站禁止使用默认 ease/linear */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* 心跳与场景动效 */
+  --animate-breathe: breathe 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  --animate-surface-in: surface-in 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-fade-up: fade-up 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-palette-in: palette-in 0.16s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 :root {
@@ -67,6 +117,15 @@
   --sidebar-accent-foreground: hsl(240 5.9% 10%);
   --sidebar-border: hsl(220 13% 91%);
   --sidebar-ring: hsl(217.2 91.2% 59.8%);
+
+  /* 设计系统 2.0 的新增语义色——与上面的 shadcn 骨架色并存 */
+  --paper-soft: oklch(0.985 0 0);
+  --brand: oklch(0.52 0.18 264);
+  --brand-soft: oklch(0.94 0.03 264);
+  --brand-foreground: oklch(0.985 0 0);
+  --signal-success: oklch(0.6 0.14 155);
+  --signal-warning: oklch(0.75 0.15 80);
+  --signal-danger: oklch(0.55 0.2 25);
 }
 
 .dark {
@@ -112,6 +171,87 @@
   .main-chat-area {
     @apply w-4/5 max-w-[1024px];
   }
+}
+
+/* ============================================================
+   设计系统 2.0 — 关键帧与手工打磨的交互细节
+   见 docs/JOBS_WEB_DESIGN_CN.md 第八部分「动效哲学」、第十部分「签名时刻」
+   ============================================================ */
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes surface-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes listen-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px var(--color-ink-faint),
+      var(--shadow-elevation-1);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px oklch(0.52 0.18 264 / 35%),
+      0 0 0 4px oklch(0.52 0.18 264 / 8%),
+      var(--shadow-elevation-2);
+  }
+}
+
+/* 悬浮输入条：聚焦时"倾听感"光晕呼吸 + 轻微上浮 */
+.vc-chat-input {
+  transition:
+    box-shadow 0.3s var(--ease-standard),
+    transform 0.25s var(--ease-standard);
+}
+.vc-chat-input:focus-within {
+  transform: translateY(-2px);
+  animation: listen-glow 2.6s var(--ease-standard) infinite;
+}
+
+/* 数字翻牌：更新时的一次轻微强调，而不是瞬间跳变 */
+.vc-tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 /* OverlayScrollbars custom styles */

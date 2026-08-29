@@ -23,9 +23,7 @@ const ChatWelcomeScreen: FC<ChatWelcomeScreenProps> = ({
 
       {/* Welcome content */}
       <div className="flex flex-1 flex-col items-center justify-center gap-12">
-        <h1 className="text-center font-semibold text-3xl text-gray-950 leading-12">
-          {title}
-        </h1>
+        <h1 className="text-center font-medium text-ink text-title">{title}</h1>
 
         {/* Input card */}
         <ChatInputArea
@@ -40,51 +38,15 @@ const ChatWelcomeScreen: FC<ChatWelcomeScreenProps> = ({
   );
 };
 
+/**
+ * A single, quiet brand-tinted glow — not a five-color blur farm.
+ * Color is spent once, on purpose. See docs/JOBS_WEB_DESIGN_CN.md §6.3.
+ */
 const ChatBackground = () => (
-  <div className="-z-10 absolute inset-0 overflow-hidden opacity-30">
-    {[
-      {
-        left: "12%",
-        top: "50%",
-        size: "h-[40vh] w-[18vw]",
-        colors: "from-yellow-100 to-yellow-200",
-      },
-      {
-        left: "28%",
-        top: "50%",
-        size: "h-[38vh] w-[16vw]",
-        colors: "from-green-100 to-green-200",
-      },
-      {
-        left: "45%",
-        top: "50%",
-        size: "h-[42vh] w-[19vw]",
-        colors: "from-teal-100 to-teal-200",
-      },
-      {
-        left: "62%",
-        top: "50%",
-        size: "h-[40vh] w-[18vw]",
-        colors: "from-blue-100 to-blue-200",
-      },
-      {
-        left: "78%",
-        top: "50%",
-        size: "h-[35vh] w-[15vw]",
-        colors: "from-purple-100 to-purple-200",
-      },
-    ].map((blur) => (
-      <div
-        key={`blur-${blur.left}-${blur.colors}`}
-        className={`-translate-x-1/2 -translate-y-1/2 absolute ${blur.size}`}
-        style={{ left: blur.left, top: blur.top }}
-      >
-        <div
-          className={`h-full w-full rounded-full bg-linear-to-br ${blur.colors} blur-[100px]`}
-        />
-      </div>
-    ))}
-  </div>
+  <div
+    aria-hidden="true"
+    className="-z-10 -translate-x-1/2 -translate-y-1/2 absolute top-1/2 left-1/2 h-[45vh] w-[45vh] rounded-full bg-brand/[0.06] blur-[120px]"
+  />
 );
 
 export default memo(ChatWelcomeScreen);

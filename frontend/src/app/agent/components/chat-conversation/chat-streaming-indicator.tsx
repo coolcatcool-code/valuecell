@@ -1,18 +1,23 @@
 import { type FC, memo } from "react";
 
+/**
+ * The same small breathing dot that marks every AI turn (see
+ * chat-item-area.tsx), shown on its own while nothing has streamed
+ * back yet. Same visual language, no separate "loading spinner"
+ * vocabulary — see docs/JOBS_WEB_DESIGN_CN.md §8.3.
+ */
 const StreamingIndicator: FC = () => {
   return (
     <output
-      className="flex items-center gap-2 text-gray-500 text-sm"
+      className="flex items-center gap-3 text-body text-ink-soft"
       aria-live="polite"
-      aria-label="AI is thinking"
+      aria-label="ValueCell is thinking"
     >
-      <div className="flex space-x-1" aria-hidden="true">
-        <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400 delay-0" />
-        <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400 delay-150" />
-        <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400 delay-300" />
-      </div>
-      <span>AI is thinking...</span>
+      <span
+        aria-hidden="true"
+        className="size-1.5 shrink-0 animate-breathe rounded-full bg-ink"
+      />
+      <span>Thinking...</span>
     </output>
   );
 };
