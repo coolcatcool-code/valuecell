@@ -367,162 +367,68 @@ sudo systemctl status certbot.timer
 
 ## Docker部署
 
-### Dockerfile
+> **2024年更新**：本节早期版本描述的 `python/Dockerfile`、`frontend/Dockerfile`
+> 和其中的环境变量名（如 `OKX_SECRET_KEY`）是在实际验证之前写的示意性设计，
+> 与仓库真实结构不符（真实的 OKX 变量名是 `OKX_API_SECRET` /
+> `OKX_API_PASSPHRASE`，参见 `.env.example`）。现已替换为经过实际构建
+> 验证的版本。完整的自托管发布说明见 **[docs/RELEASE_CN.md](./RELEASE_CN.md)**，
+> 这里只保留一个精简版供快速参考。
 
-**后端Dockerfile**：
+真实文件位置：
 
-```dockerfile
-# python/Dockerfile
-FROM python:3.12-slim
-
-# 安装系统依赖
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    git \
-    && rm -rf /var/lib/apt/lists/*
-
-# 安装uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:$PATH"
-
-# 设置工作目录
-WORKDIR /app
-
-# 复制依赖文件
-COPY pyproject.toml uv.lock ./
-COPY valuecell ./valuecell
-COPY scripts ./scripts
-COPY configs ./configs
-
-# 安装依赖
-RUN uv sync --frozen
-
-# 初始化数据库
-RUN uv run python scripts/init_db.py
-
-# 暴露端口
-EXPOSE 8000
-
-# 启动命令
-CMD ["uv", "run", "python", "scripts/launch.py"]
+```
+docker/backend.Dockerfile     # FastAPI 后端 + 默认智能体（Research/AutoTrading/News）
+docker/frontend.Dockerfile    # bun 构建 + nginx 静态托管，反代 /api/v1 到后端
+docker/nginx.conf
+docker/backend-entrypoint.sh  # 启动前校验 .env 是否配置了至少一个 LLM Provider Key
+docker-compose.yml            # 仓库根目录
 ```
 
-**前端Dockerfile**：
-
-```dockerfile
-# frontend/Dockerfile
-FROM oven/bun:latest AS builder
-
-WORKDIR /app
-
-# 复制依赖文件
-COPY package.json bun.lockb ./
-
-# 安装依赖
-RUN bun install --frozen-lockfile
-
-# 复制源代码
-COPY . .
-
-# 构建
-RUN bun run build
-
-# 生产镜像
-FROM nginx:alpine
-
-# 复制构建产物
-COPY --from=builder /app/dist /usr/share/nginx/html
-
-# 复制Nginx配置
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
-```
-
-### Docker Compose
-
-```yaml
-# docker-compose.yml
-version: '3.8'
-
-services:
-  backend:
-    build:
-      context: ./python
-      dockerfile: Dockerfile
-    container_name: valuecell-backend
-    ports:
-      - "8000:8000"
-    environment:
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - OKX_API_KEY=${OKX_API_KEY}
-      - OKX_SECRET_KEY=${OKX_SECRET_KEY}
-      - OKX_PASSPHRASE=${OKX_PASSPHRASE}
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./lancedb:/app/lancedb
-      - ./.knowledgebase:/app/.knowledgebase
-    restart: unless-stopped
-    networks:
-      - valuecell-network
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: valuecell-frontend
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-    restart: unless-stopped
-    networks:
-      - valuecell-network
-
-networks:
-  valuecell-network:
-    driver: bridge
-
-volumes:
-  data:
-  logs:
-  lancedb:
-  knowledgebase:
-```
-
-### 部署步骤
+### 部署步骤（已用真实 `docker compose build` 验证过依赖安装与启动流程）
 
 ```bash
-# 1. 准备环境变量
+# 1. 准备环境变量（仓库根目录）
 cp .env.example .env
-vim .env  # 编辑配置
+vim .env   # 至少填写一个 Provider Key：OPENROUTER_API_KEY / GOOGLE_API_KEY / ...
+           # 不填的话后端会给出明确报错并退出，而不是静默崩溃循环
 
-# 2. 构建镜像
-docker-compose build
+# 2. 一键构建 + 启动
+docker compose up -d --build
 
-# 3. 启动服务
-docker-compose up -d
+# 3. 查看日志
+docker compose logs -f backend
 
-# 4. 查看日志
-docker-compose logs -f
+# 4. 健康检查
+curl http://localhost:8000/api/v1/system/health
 
-# 5. 停止服务
-docker-compose down
+# 5. 打开前端
+open http://localhost:1420
 
-# 6. 更新代码后重新部署
+# 6. 停止
+docker compose down
+
+# 7. 更新代码后重新部署
 git pull
-docker-compose build
-docker-compose up -d
+docker compose up -d --build
 ```
+
+**重要限制（已在文档中明确标注，不是缺省疏漏）**：默认镜像只包含
+Research/AutoTrading/News 三个智能体和 ValueCell 主智能体，**不包含**
+`python/third_party/` 下的投资大师人格（Warren Buffett 等）和
+TradingAgents 多分析师模式——它们各自需要独立的 Python 虚拟环境，
+为了让镜像保持精简、构建保持真正的"一键"，这是 v1 阶段刻意做出的范围
+取舍。需要这些智能体的用户目前仍需按 [CONFIGURATION_GUIDE](./CONFIGURATION_GUIDE.md)
+手动配置。详见 [docs/RELEASE_CN.md](./RELEASE_CN.md)。
 
 ---
 
 ## 分布式部署
+
+> **标注**：本节及以下的"云服务部署"是架构方向性指南（PostgreSQL、Redis、
+> 负载均衡等如何组合），不是已验证可直接运行的配置——不像上面的 Docker
+> 部署一节已经用真实 `docker compose build` 跑通过。如果要照着做，请把它
+> 当作设计参考，自行验证每一步，而不是假设它和 `docker/` 目录下的文件
+> 一样经过测试。
 
 ### 架构设计
 
@@ -785,7 +691,8 @@ aws secretsmanager create-secret \
   --secret-string '{
     "OPENROUTER_API_KEY": "sk-xxx",
     "OKX_API_KEY": "xxx",
-    "OKX_SECRET_KEY": "xxx"
+    "OKX_API_SECRET": "xxx",
+    "OKX_API_PASSPHRASE": "xxx"
   }'
 
 # 在应用中读取

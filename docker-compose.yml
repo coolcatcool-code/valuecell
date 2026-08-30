@@ -1,0 +1,64 @@
+# One-click self-hosted deployment for ValueCell.
+#
+# Quick start:
+#   cp .env.example .env   # fill in at least one LLM provider API key
+#   docker compose up -d --build
+#   open http://localhost:1420
+#
+# ValueCell never sees your keys: the .env file is bind-mounted
+# read-only into the backend container, and the Auto Trading Agent
+# talks to your exchange directly from there — nothing is proxied
+# through, or stored by, any ValueCell-operated service. See
+# docs/RELEASE_CN.md for what this build does and does not include.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    volumes:
+      # Real .env FILE, not just injected vars — python/scripts/launch.py
+      # runs each agent via `uv run --env-file /app/.env`, which needs
+      # an actual file on disk at the repo root.
+      - ./.env:/app/.env:ro
+      - valuecell_db:/app/data
+      - valuecell_lancedb:/app/lancedb
+      - valuecell_knowledge:/app/.knowledge
+      - valuecell_logs:/app/logs
+    environment:
+      # Ambient env vars win over the mounted .env file's contents
+      # (verified: uv run --env-file does not override already-set
+      # vars), so these are guaranteed regardless of what a user's
+      # .env — copied from .env.example — happens to say.
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - VALUECELL_SQLITE_DB=sqlite:////app/data/valuecell.db
+      - VALUECELL_LANCEDB_URI=/app/lancedb
+    ports:
+      # Optional direct access to the API / Swagger docs at :8000/docs.
+      # The browser app itself only ever talks to the frontend origin.
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "uv", "run", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/system/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "1420:80"
+    restart: unless-stopped
+
+volumes:
+  valuecell_db:
+  valuecell_lancedb:
+  valuecell_knowledge:
+  valuecell_logs:

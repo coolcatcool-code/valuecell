@@ -1,0 +1,112 @@
+name: Docker Build
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "docker/**"
+      - "docker-compose.yml"
+      - "python/pyproject.toml"
+      - "python/uv.lock"
+      - "frontend/package.json"
+      - "frontend/bun.lock"
+  pull_request:
+    branches: ["*"]
+    paths:
+      - "docker/**"
+      - "docker-compose.yml"
+      - "python/pyproject.toml"
+      - "python/uv.lock"
+      - "frontend/package.json"
+      - "frontend/bun.lock"
+
+jobs:
+  # These images are what docs/RELEASE_CN.md's one-click deploy actually
+  # ships — this workflow is the durable substitute for the live
+  # `docker compose build` validation that a sandboxed dev session
+  # can't always reach (container registries / browser-binary CDNs may
+  # be blocked by local network policy; GitHub-hosted runners aren't
+  # subject to that).
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/backend.Dockerfile
+          push: false
+          tags: valuecell-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/frontend.Dockerfile
+          push: false
+          tags: valuecell-frontend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  compose-up-smoke-test:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Create a throwaway .env with a placeholder key
+        run: |
+          cp .env.example .env
+          # The backend fails fast (by design — see
+          # docker/backend-entrypoint.sh) unless at least one LLM
+          # provider key is present. A placeholder is enough: this
+          # smoke test only checks that the stack starts and the
+          # health endpoint responds, not that real inference works.
+          sed -i 's/^OPENROUTER_API_KEY=$/OPENROUTER_API_KEY=sk-or-v1-ci-placeholder/' .env
+
+      - name: docker compose up
+        run: docker compose up -d --build
+
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/api/v1/system/health; then
+              echo "backend healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "backend never became healthy" >&2
+          docker compose logs backend
+          exit 1
+
+      - name: Check frontend serves and proxies through to the backend
+        run: |
+          curl -sf http://localhost:1420/ > /dev/null
+          curl -sf http://localhost:1420/api/v1/system/health
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

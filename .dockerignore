@@ -1,0 +1,47 @@
+# ============================================
+# ValueCell Docker build context exclusions
+# Keeps images lean and build context uploads fast.
+# See docker/backend.Dockerfile and docker/frontend.Dockerfile.
+# ============================================
+
+.git
+.github
+
+# Secrets — must never be baked into an image; the running container
+# gets .env via a bind mount instead (see docker-compose.yml).
+.env
+.env.*
+!.env.example
+
+# Python
+**/__pycache__/
+**/*.py[codz]
+**/.venv/
+**/.pytest_cache/
+**/.ruff_cache/
+**/*.egg-info/
+
+# Investment-master personas (ai-hedge-fund) and TradingAgents are not
+# part of the default one-click image — see docs/RELEASE_CN.md for why.
+python/third_party/
+
+# Runtime state / generated data (these live in named volumes at
+# container runtime, not in the image)
+valuecell.db
+lancedb/
+.knowledge/
+.knowledgebase/
+logs/
+python/logs/
+
+# Node / frontend
+frontend/node_modules/
+frontend/build/
+frontend/.react-router/
+frontend/src-tauri/target/
+
+# Misc
+**/*.log
+**/.DS_Store
+docs/
+assets/
