@@ -147,6 +147,8 @@ bash start.sh
 - **Web UI**：在浏览器中导航到 [http://localhost:1420](http://localhost:1420)
 - **日志**：在 `logs/{timestamp}/*.log` 监控应用程序日志，获取后端服务和各个智能体的详细运行时信息
 
+想知道打开界面之后具体该怎么用，见完整的**[产品使用指南](docs/USER_GUIDE_CN.md)**（English: [USER_GUIDE.md](docs/USER_GUIDE.md)）。
+
 ## 注意
 
 运行应用程序前，请确保所有前提条件已安装且环境变量已正确配置

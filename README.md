@@ -155,7 +155,7 @@ If it has been a long time since the last update, you can delete the database fi
 
 ## Next Steps
 
-Once the application is running, you can explore the web interface to interact with ValueCell's features and capabilities.
+Once the application is running, you can explore the web interface to interact with ValueCell's features and capabilities. For a full walkthrough of what to actually type and click, see the **[User Guide](docs/USER_GUIDE.md)** (中文版：[USER_GUIDE_CN.md](docs/USER_GUIDE_CN.md)).
 
 ## Live Trading (OKX Preview)
 
