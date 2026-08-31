@@ -125,9 +125,9 @@ API key not found for 'openrouter'. Please set OPENROUTER_API_KEY in .env
 | `docker-compose.yml` 的 YAML 结构/变量插值 | ✅ 验证过 | `docker compose config` 跑通，展开结果符合预期 |
 | Playwright 系统依赖（apt 包）安装 | ✅ 验证过 | `uv run playwright install --with-deps chromium` 里 apt 部分成功 |
 | Playwright Chromium **二进制**下载 | ❌ 未验证 | 沙盒的出口网络策略挡掉了 `cdn.playwright.dev`（策略性拒绝，不是我代码的问题）|
-| `docker build`（后端镜像） | ✅ **已在真实 GitHub Actions 上验证成功**（3分10秒）| 见下方"CI 首次真实运行"一节 |
-| `docker build`（前端镜像） | ⚠️ 首次真实运行**失败**，已定位根因并修复，**修复本身还没有被真实构建验证过** | 同上 |
-| `docker compose up` 端到端冒烟测试 | ⏸️ 因为前端镜像构建失败被跳过，还没有真正跑到这一步 | 同上 |
+| `docker build`（后端镜像） | ✅ **已在真实 GitHub Actions 上连续两次验证成功** | 见下方"CI 首次/第二次真实运行"两节 |
+| `docker build`（前端镜像） | ❌ **两次真实运行均失败，同一个报错**；第一次的"版本锁定"修复已被第二次运行证伪；本地四种方式都无法复现，问题定位到"很可能是容器化构建环境本身"，具体原因待有登录权限的人提供完整日志 | 同上 |
+| `docker compose up` 端到端冒烟测试 | ⏸️ 因为前端镜像两次都构建失败，还没有真正跑到这一步 | 同上 |
 
 **换句话说**：这份表格不再是"沙盒验证不到，所以打问号"——`docker.yml`
 这个 CI workflow 已经真实运行过一次，给出了比我在沙盒里能做到的更准确
@@ -195,12 +195,59 @@ process "/bin/sh -c bun run build" did not complete successfully: exit code: 1
 已经把触发路径改成监听整个 `frontend/**` 和 `python/**`（原来 Python
 那边也是同样的窄范围问题）。
 
-**为了不让这个 gap 变成"我说了就算"，已经用 `.github/workflows/docker.yml`
-把它补上**：这个 CI workflow 会在 GitHub Actions 的 runner 上（那里没有
-这个沙盒的网络限制）真正执行 `docker build` 两次、`docker compose up`
-一次、打真实的健康检查和前端代理请求，失败会让 CI 变红。**这个
-workflow 本身也还没有在真实 PR 上跑过一次**——它是随这次改动一起提交
-的，第一次跑是在这个改动实际被推送触发 CI 的时候。
+---
+
+## CI 第二次真实运行：版本锁定的修复是错的
+
+对应 [GitHub Actions run #33362955081](https://github.com/coolcatcool-code/valuecell/actions/runs/33362955081)，
+就是上面那次修复推送后触发的那一次。
+
+**结果**：还是同一个报错。
+
+| Job | 结果 | 耗时 |
+|---|---|---|
+| `backend` | ✅ 通过（24s，命中了 GHA 层缓存，不是从零构建） | 24s |
+| `frontend` | ❌ 失败，**一模一样的报错** | 32s |
+| `compose-up-smoke-test` | 依然没有真正跑到 | — |
+
+```
+buildx failed with: ERROR: failed to build: failed to solve:
+process "/bin/sh -c bun run build" did not complete successfully: exit code: 1
+```
+
+**结论很明确：把 `oven/bun:1` 锁定成 `oven/bun:1.3.0` 并没有解决问题。**
+上一节那套"浮动标签导致版本漂移"的推理，被这次真实结果证伪了——不是
+"还没验证"，是"验证了，错了"。这一点必须写清楚，不能因为上次的推理
+听起来很合理就假装它是对的。
+
+**收到证伪之后又做了什么**：没有直接猜第三个修复方案，而是先补测试，
+排除更多可能性。在本地额外做了一次**真正的冷安装测试**——之前三次
+"干净目录"复现，用的都是这台机器上已经存在的 565MB bun 全局缓存
+（`~/.bun/install/cache`），并不是真正意义上从零下载；这次用
+`bun install --frozen-lockfile --cache-dir=<空目录>` 强制绕开全局缓存，
+逼它重新从网络拉取每一个包（包括 `@tailwindcss/oxide-linux-x64-gnu`、
+`lightningcss-linux-x64-gnu` 这类平台相关的原生二进制依赖——这类包是
+"lockfile 在别的平台生成、目标平台装不上正确二进制"这种 bug 的经典
+出处，专门确认过 `bun.lock` 里确实包含了 linux-x64-gnu 的对应条目）。
+这次冷装 + 构建依然是干净的 `exit code: 0`。
+
+四次本地复现方式全部失败（复现不出问题），说明问题很可能不在依赖、
+不在版本、也不在 bun 缓存状态，而是**真正的容器化 BuildKit 执行环境本身
+的问题**（最可能是那个 RUN 步骤的内存或其他资源限制）——这是本地
+`bun run build`（不经过 Docker）永远测不出来的一类问题。
+
+**目前做的事**：在 `docker/frontend.Dockerfile` 的构建步骤前加了两行
+诊断输出（`bun --version`、`free -h`、`df -h /tmp`），这样下次失败时
+日志里至少能看到当时容器里实际是什么版本、有多少可用内存，而不是又一个
+光秃秃的 `exit code: 1`。
+
+**这里要老实说一句我做不到的事**：GitHub Actions 未登录状态下能看到的
+只有一行摘要报错，`bun run build` 真正打印出来的完整过程（哪个模块在
+转换、卡在哪一步、有没有更详细的错误堆栈）我这边看不到，需要登录才能
+展开完整日志。到这一步继续靠本地排除法盲猜第三个修复方案，性价比已经
+很低——更快的路径是麻烦你把 CI 页面上 "Build frontend image" 这一步
+展开后的完整输出复制给我（尤其是最后那行 `exit code: 1` 之前的内容），
+这样能一次定位，而不是继续来回猜、来回等一次 CI。
 
 ---
 
@@ -252,13 +299,19 @@ workflow 本身也还没有在真实 PR 上跑过一次**——它是随这次�
 
 ## 如果要继续往前推，建议的下一步顺序
 
-1. ~~把 `.github/workflows/docker.yml` 实际跑一遍~~ **已经跑过第一次**：
-   backend 通过，frontend 因为 `oven/bun:1` 浮动版本标签失败，已定位并
-   修复（见上方"CI 首次真实运行"一节）。**还没做完的部分**：这次修复
-   本身还没被真实构建验证过，`compose-up-smoke-test` 那一步因为
-   frontend 失败被跳过，也还没有真正跑到过。下一次这个 workflow 跑
-   起来，第一件事是确认 frontend 也能过，第二件事是确认
-   `compose-up-smoke-test` 真的能走完整个流程。
+1. **进行中，卡在 frontend 镜像构建上**：`.github/workflows/docker.yml`
+   已经真实跑了两次。backend 两次都过了。frontend 两次都在
+   `bun run build` 这一步失败，报错一模一样；第一次怀疑是
+   `oven/bun:1` 浮动版本标签导致的漂移，锁定到 `oven/bun:1.3.0` 后
+   第二次运行**依然是同一个报错**，说明那个诊断是错的。本地做了四种
+   方式的复现尝试（含真正绕开 bun 全局缓存的冷安装）全部无法重现，
+   现在的判断是问题出在容器化构建环境本身，不是依赖或版本（详见上方
+   "CI 第二次真实运行"一节）。已经在 Dockerfile 里加了诊断输出
+   （bun 版本、可用内存），但**继续往前推的最快方式是需要一个能登录
+   GitHub 的人把 "Build frontend image" 步骤展开后的完整日志文本发
+   过来**——未登录状态下只能看到最后一行摘要报错，看不到 `bun run build`
+   真正打印的过程，本地排除法已经到极限了。`compose-up-smoke-test`
+   这一步因为 frontend 始终没过，两次都没有真正跑到过。
 2. 把镜像推到 GHCR，把"一键"从"本地编译几分钟"变成"拉取几十秒"。
 3. 把这次修的"无密钥崩溃"检查同步补到 `python/scripts/launch.py`，
    让非 Docker 的本地开发路径也有同样清楚的报错。

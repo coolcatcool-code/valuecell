@@ -5,16 +5,22 @@
 # Build context MUST be the repository root, e.g.:
 #   docker build -f docker/frontend.Dockerfile -t valuecell-frontend .
 #
-# The bun version below MUST stay pinned, and MUST match
-# frontend/package.json's "packageManager" field. This was originally
-# `oven/bun:1` (a floating major-version tag) and it broke a real CI
-# build: `bun run build` failed with exit code 1 on whatever bun 1.x
-# the tag resolved to at that moment, while the exact same command
-# against the pinned version below (reproduced locally, twice, from a
-# clean install matching this Dockerfile's COPY order) built cleanly
-# both times. If you bump the pinned bun version here, bump
-# package.json's packageManager to match in the same change, and
-# confirm `bun run build` still succeeds before merging.
+# STATUS (see docs/RELEASE_CN.md for the full writeup): `bun run build`
+# fails with exit code 1 in this build stage on GitHub Actions, twice
+# in a row, including after pinning `oven/bun:1` -> `oven/bun:1.3.0`
+# (matching package.json's packageManager field exactly) — so the
+# floating-tag theory was WRONG, not just unverified. Four different
+# local reproduction attempts in a Linux sandbox (bun 1.3.11) all
+# succeeded: plain `bun run build`, with VITE_API_BASE_URL set, a full
+# clean-room copy of this exact COPY/install/build sequence, and a
+# truly cold install via `--cache-dir` pointed at an empty directory
+# (to rule out a warm global bun cache masking a fetch-time issue).
+# None of that reproduces the failure, which means whatever's wrong is
+# specific to the actual containerized BuildKit execution — most
+# likely a resource constraint (memory) in that RUN step, not a
+# dependency or version problem. The two RUN lines below exist to make
+# the *next* failure self-diagnosing in the CI log instead of another
+# bare "exit code: 1".
 FROM oven/bun:1.3.0 AS builder
 WORKDIR /app
 
@@ -27,6 +33,7 @@ COPY frontend/ .
 # works behind any host/port the container ends up published on,
 # since nginx (below) resolves /api/v1 on the same origin.
 ENV VITE_API_BASE_URL=/api/v1
+RUN bun --version && (free -h || true) && (df -h /tmp || true)
 RUN bun run build
 
 FROM nginx:1.27-alpine
