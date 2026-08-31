@@ -9,19 +9,15 @@ on:
     paths:
       - "docker/**"
       - "docker-compose.yml"
-      - "python/pyproject.toml"
-      - "python/uv.lock"
-      - "frontend/package.json"
-      - "frontend/bun.lock"
+      - "python/**"
+      - "frontend/**"
   pull_request:
     branches: ["*"]
     paths:
       - "docker/**"
       - "docker-compose.yml"
-      - "python/pyproject.toml"
-      - "python/uv.lock"
-      - "frontend/package.json"
-      - "frontend/bun.lock"
+      - "python/**"
+      - "frontend/**"
 
 jobs:
   # These images are what docs/RELEASE_CN.md's one-click deploy actually

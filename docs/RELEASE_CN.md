@@ -125,15 +125,75 @@ API key not found for 'openrouter'. Please set OPENROUTER_API_KEY in .env
 | `docker-compose.yml` 的 YAML 结构/变量插值 | ✅ 验证过 | `docker compose config` 跑通，展开结果符合预期 |
 | Playwright 系统依赖（apt 包）安装 | ✅ 验证过 | `uv run playwright install --with-deps chromium` 里 apt 部分成功 |
 | Playwright Chromium **二进制**下载 | ❌ 未验证 | 沙盒的出口网络策略挡掉了 `cdn.playwright.dev`（策略性拒绝，不是我代码的问题）|
-| `docker build` / `docker compose build` 真正跑一遍 | ❌ 本次会话未验证 | 同样的出口网络策略挡掉了 Docker Hub 和 GHCR 的镜像 blob CDN（`production.cloudfront.docker.com`、`pkg-containers.githubusercontent.com` 均返回策略性 403）|
-| 前端镜像构建（bun build + nginx） | ❌ 本次会话未验证（构建逻辑本身在非 Docker 环境下验证过：`bun run build`/`bun run typecheck` 在本 repo 之前的会话中已跑通）| 同上，nginx/bun 基础镜像拉取被挡 |
+| `docker build`（后端镜像） | ✅ **已在真实 GitHub Actions 上验证成功**（3分10秒）| 见下方"CI 首次真实运行"一节 |
+| `docker build`（前端镜像） | ⚠️ 首次真实运行**失败**，已定位根因并修复，**修复本身还没有被真实构建验证过** | 同上 |
+| `docker compose up` 端到端冒烟测试 | ⏸️ 因为前端镜像构建失败被跳过，还没有真正跑到这一步 | 同上 |
 
-**换句话说**：我能在这个沙盒里验证的，是"应用本身对不对、依赖锁文件
-对不对、`.env` 处理逻辑对不对"——这些恰恰是最容易出真实 bug 的地方，
-也确实抓到了一个。我不能在这个沙盒里验证的，是"Docker 镜像本身能不能
-真的构建出来"——这纯粹是这次会话的出口网络策略限制（容器镜像仓库和
-二进制 CDN 不在允许名单里，pypi.org/registry.npmjs.org 等包管理器倒是
-允许的），不是 Dockerfile 逻辑的问题。
+**换句话说**：这份表格不再是"沙盒验证不到，所以打问号"——`docker.yml`
+这个 CI workflow 已经真实运行过一次，给出了比我在沙盒里能做到的更准确
+的信号：后端镜像没问题，前端镜像真的有一个 bug，而且被抓出来了。这是
+"先在沙盒里做能做到的应用层验证，再靠 CI 补上镜像构建这一层"这个分工
+本来就该产生的结果——不是失败，是这套验证机制第一次真正发挥作用。
+
+---
+
+## CI 首次真实运行：backend 过了，frontend 真的有 bug
+
+对应 [GitHub Actions run #33285320341](https://github.com/coolcatcool-code/valuecell/actions/runs/33285320341)。
+
+**结果**：
+
+| Job | 结果 | 耗时 |
+|---|---|---|
+| `backend` | ✅ 通过 | 3m 10s |
+| `frontend` | ❌ 失败 | 28s |
+| `compose-up-smoke-test` | ⏸️ 未执行（依赖的 `frontend` 失败，被跳过） | — |
+
+**frontend 失败的具体报错**：
+
+```
+buildx failed with: ERROR: failed to build: failed to solve:
+process "/bin/sh -c bun run build" did not complete successfully: exit code: 1
+```
+
+**根因排查过程**（不是猜的，是排除法验证出来的）：
+
+`docker/frontend.Dockerfile` 原来写的是 `FROM oven/bun:1`——`:1` 是一个
+**浮动的大版本号标签**，每次重新构建都可能拉到不同的具体 bun 版本。我在
+本地用固定的 bun 1.3.11（这个沙盒里安装的版本）做了三次独立复现，全部
+成功：
+
+1. 直接在已有的 `frontend/` 目录跑 `bun run build` → 成功
+2. 加上 `VITE_API_BASE_URL=/api/v1`（Dockerfile 里设置的那个变量）→ 成功
+3. 完全模拟 Dockerfile 的构建顺序——全新目录、只拷 `package.json` +
+   `bun.lock`、`bun install --frozen-lockfile`、再拷入其余源码、再
+   `bun run build` → 成功
+
+三次都是干净的 `exit code: 0`。既然本地用固定版本怎么都复现不出失败，
+最合理的解释就是 CI 那次运行拉到的 bun 版本和我验证过的不是同一个——
+这正是"未锁定的浮动标签"这类 bug 的典型指纹：本地能跑，CI 某次运气不好
+拉到一个有回归的新版本就炸了，而且下次拉图层缓存命中了又可能"自己好了"，
+更难排查。
+
+**修复**：把 `FROM oven/bun:1` 改成 `FROM oven/bun:1.3.0`，和
+`frontend/package.json` 里 `"packageManager": "bun@1.3.0"` 声明的版本
+对齐——不是随便选一个能跑的版本锁死，是让 Dockerfile 里的版本和项目自己
+声明的规范版本保持一致，这样以后谁改 `packageManager` 字段，也会想起来
+同步改这里（Dockerfile 里加了对应的注释提醒）。
+
+**诚实说明当前状态**：这个修复本身**还没有被真实构建验证过**——沙盒的
+出口网络策略挡掉了 `oven/bun:1.3.0` 这个镜像的拉取（和之前挡掉
+`oven/bun:1`、GHCR 基础镜像是同一类策略性 403，不是这次新出现的问题），
+所以我没法在这里再跑一次 `docker build` 确认。真正的验证会发生在这个
+修复被推送之后，`.github/workflows/docker.yml` 的下一次运行——这也是为
+什么上面把它标成"已定位并修复，修复本身待验证"而不是直接标"✅ 已解决"。
+
+**顺带修的一个 CI 设计漏洞**：修复过程中发现 `docker.yml` 的触发路径
+只监听了 `frontend/package.json`、`frontend/bun.lock`，没有监听
+`frontend/src/**`——也就是说如果哪次改动纯粹是前端源码改动（不碰依赖
+文件），这个构建校验根本不会被触发，类似这次的回归会被放过而不自知。
+已经把触发路径改成监听整个 `frontend/**` 和 `python/**`（原来 Python
+那边也是同样的窄范围问题）。
 
 **为了不让这个 gap 变成"我说了就算"，已经用 `.github/workflows/docker.yml`
 把它补上**：这个 CI workflow 会在 GitHub Actions 的 runner 上（那里没有
@@ -192,9 +252,13 @@ workflow 本身也还没有在真实 PR 上跑过一次**——它是随这次�
 
 ## 如果要继续往前推，建议的下一步顺序
 
-1. 把 `.github/workflows/docker.yml` 实际跑一遍，确认 CI 里的
-   `docker compose up` 冒烟测试真的能通过（这是目前唯一还没有被
-   任何环境验证过的一环）。
+1. ~~把 `.github/workflows/docker.yml` 实际跑一遍~~ **已经跑过第一次**：
+   backend 通过，frontend 因为 `oven/bun:1` 浮动版本标签失败，已定位并
+   修复（见上方"CI 首次真实运行"一节）。**还没做完的部分**：这次修复
+   本身还没被真实构建验证过，`compose-up-smoke-test` 那一步因为
+   frontend 失败被跳过，也还没有真正跑到过。下一次这个 workflow 跑
+   起来，第一件事是确认 frontend 也能过，第二件事是确认
+   `compose-up-smoke-test` 真的能走完整个流程。
 2. 把镜像推到 GHCR，把"一键"从"本地编译几分钟"变成"拉取几十秒"。
 3. 把这次修的"无密钥崩溃"检查同步补到 `python/scripts/launch.py`，
    让非 Docker 的本地开发路径也有同样清楚的报错。

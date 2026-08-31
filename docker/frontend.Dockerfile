@@ -4,8 +4,18 @@
 #
 # Build context MUST be the repository root, e.g.:
 #   docker build -f docker/frontend.Dockerfile -t valuecell-frontend .
-
-FROM oven/bun:1 AS builder
+#
+# The bun version below MUST stay pinned, and MUST match
+# frontend/package.json's "packageManager" field. This was originally
+# `oven/bun:1` (a floating major-version tag) and it broke a real CI
+# build: `bun run build` failed with exit code 1 on whatever bun 1.x
+# the tag resolved to at that moment, while the exact same command
+# against the pinned version below (reproduced locally, twice, from a
+# clean install matching this Dockerfile's COPY order) built cleanly
+# both times. If you bump the pinned bun version here, bump
+# package.json's packageManager to match in the same change, and
+# confirm `bun run build` still succeeds before merging.
+FROM oven/bun:1.3.0 AS builder
 WORKDIR /app
 
 COPY frontend/package.json frontend/bun.lock ./
